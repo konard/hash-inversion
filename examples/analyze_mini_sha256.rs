@@ -1,6 +1,17 @@
 //! Experiment to analyze and debug mini_sha256 behavior
 //!
-//! Run with: cargo run --example analyze_mini_sha256
+//! Run with: `cargo run --example analyze_mini_sha256`
+//!
+//! This file contains multiple versions of hash function implementations
+//! for testing and comparison purposes.
+
+// Suppress warnings that are expected in analysis/experiment code
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(dead_code)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::needless_range_loop)]
 
 /// Constants for MiniSHA256 (from lib.rs)
 const MINI_SHA256_H: [u8; 8] = [0x6a, 0xbb, 0x3c, 0xa5, 0x51, 0x9b, 0x1f, 0x5b];

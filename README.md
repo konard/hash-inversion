@@ -1,286 +1,167 @@
-# rust-ai-driven-development-pipeline-template
+# hash-inversion
 
-A comprehensive template for AI-driven Rust development with full CI/CD pipeline support.
+A Rust library demonstrating hash inversion through precomputed lookup tables for 8-bit hash functions.
 
-[![CI/CD Pipeline](https://github.com/link-foundation/rust-ai-driven-development-pipeline-template/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/link-foundation/rust-ai-driven-development-pipeline-template/actions)
+[![CI/CD Pipeline](https://github.com/konard/hash-inversion/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/konard/hash-inversion/actions)
 [![Rust Version](https://img.shields.io/badge/rust-1.70%2B-blue.svg)](https://www.rust-lang.org/)
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 
+## Core Idea
+
+Cryptographic hash functions like MD5 and SHA-256 are designed to be one-way functions, meaning given a hash output, it should be computationally infeasible to find the original input (preimage resistance). However, when we reduce the hash output to a small number of bits (like 8 bits), the space of possible outputs becomes small enough (256 values) that we can precompute a lookup table mapping every possible hash value back to an input that produces it.
+
+This library implements:
+- **8-bit truncated hash functions** (MD5, SHA-256)
+- **Custom 8-bit hash functions** (MiniMD5, MiniSHA256)
+- **Precomputed lookup tables** for O(1) hash inversion
+- **Embedded const arrays** with preimages for all 256 hash values
+
+## Hash Function Visualizations
+
+The following plots show the behavior of each 8-bit hash function for inputs 0-255:
+
+### MD5 (truncated to 8-bit)
+![MD5 8-bit Hash](plots/md5_8bit.svg)
+
+### SHA-256 (truncated to 8-bit)
+![SHA-256 8-bit Hash](plots/sha256_8bit.svg)
+
+### MiniMD5 (custom 8-bit)
+![MiniMD5 Hash](plots/mini_md5.svg)
+
+### MiniSHA256 (custom 8-bit)
+![MiniSHA256 Hash](plots/mini_sha256.svg)
+
 ## Features
 
-- **Rust stable support**: Works with Rust stable version
-- **Cross-platform testing**: CI runs on Ubuntu, macOS, and Windows
-- **Comprehensive testing**: Unit tests, integration tests, and doc tests
-- **Code quality**: rustfmt + Clippy with pedantic lints
-- **Pre-commit hooks**: Automated code quality checks before commits
-- **CI/CD pipeline**: GitHub Actions with multi-platform support
-- **Changelog management**: Fragment-based changelog (like Changesets/Scriv)
-- **Release automation**: Automatic GitHub releases
+- **8-bit Hash Functions**: MD5 and SHA-256 truncated to 8 bits, plus custom MiniMD5 and MiniSHA256
+- **Hash Inversion**: Find preimages using precomputed lookup tables
+- **O(1) Lookup**: Embedded const arrays enable instant preimage retrieval
+- **Full Coverage**: Every hash value (0-255) has a valid preimage
+- **Cross-platform**: Works on Linux, macOS, and Windows
 
 ## Quick Start
 
-### Using This Template
+```rust
+use hash_inversion::{
+    md5_8bit, sha256_8bit, mini_md5, mini_sha256,
+    lookup_md5_8bit_preimage, lookup_sha256_8bit_preimage,
+    lookup_mini_md5_preimage, lookup_mini_sha256_preimage,
+};
 
-1. Click "Use this template" on GitHub to create a new repository
-2. Clone your new repository
-3. Update `Cargo.toml` with your package name and description
-4. Rename the library and binary in `Cargo.toml`
-5. Update imports in tests and examples
-6. Build and start developing!
+fn main() {
+    // Compute 8-bit hashes
+    let data = b"hello";
+    println!("MD5 8-bit: {}", md5_8bit(data));
+    println!("SHA-256 8-bit: {}", sha256_8bit(data));
+    println!("MiniMD5: {}", mini_md5(data));
+    println!("MiniSHA256: {}", mini_sha256(data));
 
-### Development Setup
+    // Invert a hash using embedded lookup tables
+    let hash_value = 42u8;
+    let preimage = lookup_md5_8bit_preimage(hash_value);
+    assert_eq!(md5_8bit(preimage), hash_value);
+    println!("Found preimage for MD5 hash {}: {:?}", hash_value, preimage);
+}
+```
+
+## API Reference
+
+### Hash Functions
+
+| Function | Description |
+|----------|-------------|
+| `md5_8bit(&[u8]) -> u8` | First byte of MD5 hash |
+| `md5_16bit(&[u8]) -> u16` | First 2 bytes of MD5 hash |
+| `sha256_8bit(&[u8]) -> u8` | First byte of SHA-256 hash |
+| `sha256_16bit(&[u8]) -> u16` | First 2 bytes of SHA-256 hash |
+| `mini_md5(&[u8]) -> u8` | Custom 8-bit hash (MD5-inspired) |
+| `mini_sha256(&[u8]) -> u8` | Custom 8-bit hash (SHA-256-inspired) |
+| `simple_hash(u8) -> u8` | Bijective 8-bit permutation |
+
+### Lookup Functions (Embedded Tables)
+
+| Function | Description |
+|----------|-------------|
+| `lookup_md5_8bit_preimage(u8) -> &'static [u8]` | O(1) preimage lookup for MD5 8-bit |
+| `lookup_sha256_8bit_preimage(u8) -> &'static [u8]` | O(1) preimage lookup for SHA-256 8-bit |
+| `lookup_mini_md5_preimage(u8) -> &'static [u8]` | O(1) preimage lookup for MiniMD5 |
+| `lookup_mini_sha256_preimage(u8) -> &'static [u8]` | O(1) preimage lookup for MiniSHA256 |
+
+### Dynamic Lookup Tables
+
+For dynamic use cases, you can build lookup tables at runtime:
+
+```rust
+use hash_inversion::HashLookupTable;
+
+let table = HashLookupTable::new_md5_8bit();
+let preimage = table.lookup(0x42).unwrap();
+```
+
+## Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/link-foundation/rust-ai-driven-development-pipeline-template.git
-cd rust-ai-driven-development-pipeline-template
-
 # Build the project
 cargo build
 
 # Run tests
 cargo test
 
-# Run the example binary
+# Run the demo binary
 cargo run
 
-# Run an example
-cargo run --example basic_usage
-```
+# Generate hash visualization plots
+node scripts/generate-plots.mjs
 
-### Running Tests
-
-```bash
-# Run all tests
-cargo test
-
-# Run tests with verbose output
-cargo test --verbose
-
-# Run doc tests
-cargo test --doc
-
-# Run a specific test
-cargo test test_add_positive_numbers
-
-# Run tests with output
-cargo test -- --nocapture
-```
-
-### Code Quality Checks
-
-```bash
-# Format code
-cargo fmt
-
-# Check formatting (CI style)
-cargo fmt --check
-
-# Run Clippy lints
-cargo clippy --all-targets --all-features
-
-# Check file size limits
-node scripts/check-file-size.mjs
-
-# Run all checks
-cargo fmt --check && cargo clippy --all-targets --all-features && node scripts/check-file-size.mjs
+# Regenerate embedded lookup tables (if hash functions change)
+cargo run --example generate_tables
 ```
 
 ## Project Structure
 
 ```
 .
-├── .github/
-│   └── workflows/
-│       └── release.yml         # CI/CD pipeline configuration
-├── changelog.d/                # Changelog fragments
-│   ├── README.md               # Fragment instructions
-│   └── *.md                    # Individual changelog entries
-├── examples/
-│   └── basic_usage.rs          # Usage examples
-├── scripts/
-│   ├── bump-version.mjs        # Version bumping utility
-│   ├── check-file-size.mjs     # File size validation script
-│   ├── collect-changelog.mjs   # Changelog collection script
-│   ├── create-github-release.mjs # GitHub release creation
-│   ├── detect-code-changes.mjs # Detects code changes for CI
-│   ├── get-bump-type.mjs       # Determines version bump type
-│   └── version-and-commit.mjs  # CI/CD version management
 ├── src/
-│   ├── lib.rs                  # Library entry point
-│   └── main.rs                 # Binary entry point
-├── tests/
-│   └── integration_test.rs     # Integration tests
-├── .gitignore                  # Git ignore patterns
-├── .pre-commit-config.yaml     # Pre-commit hooks configuration
-├── Cargo.toml                  # Project configuration
-├── CHANGELOG.md                # Project changelog
-├── CONTRIBUTING.md             # Contribution guidelines
-├── LICENSE                     # Unlicense (public domain)
-└── README.md                   # This file
+│   ├── lib.rs            # Main library with hash functions
+│   ├── lookup_tables.rs  # Embedded precomputed lookup tables
+│   ├── main.rs           # Demo binary
+│   └── tests.rs          # Unit tests
+├── examples/
+│   ├── generate_tables.rs    # Generate lookup table code
+│   └── generate_hash_data.rs # Generate data for plotting
+├── plots/                # Auto-generated hash visualizations
+│   ├── md5_8bit.svg
+│   ├── sha256_8bit.svg
+│   ├── mini_md5.svg
+│   └── mini_sha256.svg
+├── scripts/
+│   └── generate-plots.mjs    # Plot generation script
+└── tests/
+    └── integration_test.rs   # Integration tests
 ```
 
-## Design Choices
+## How It Works
 
-### Code Quality Tools
+### Hash Inversion via Lookup Tables
 
-- **rustfmt**: Standard Rust code formatter
-  - Ensures consistent code style across the project
-  - Configured to run on all Rust files
+For an 8-bit hash function, there are only 256 possible output values. We can precompute a lookup table that maps each output value to one input that produces it:
 
-- **Clippy**: Rust linter with comprehensive checks
-  - Pedantic and nursery lints enabled for strict code quality
-  - Catches common mistakes and suggests improvements
-  - Enforces best practices
+1. **Table Generation**: For each hash value 0-255, find the smallest input that produces it
+2. **Storage**: Store preimages as `(length, byte0, byte1)` tuples in const arrays
+3. **Lookup**: Given a hash value, return the preimage in O(1) time
 
-- **Pre-commit hooks**: Automated checks before each commit
-  - Runs rustfmt to ensure formatting
-  - Runs Clippy to catch issues early
-  - Runs tests to prevent broken commits
+### Embedded vs Dynamic Tables
 
-### Testing Strategy
-
-The template supports multiple levels of testing:
-
-- **Unit tests**: In `src/lib.rs` using `#[cfg(test)]` modules
-- **Integration tests**: In `tests/` directory
-- **Doc tests**: In documentation examples using `///` comments
-- **Examples**: In `examples/` directory (also serve as documentation)
-
-### Changelog Management
-
-This template uses a fragment-based changelog system similar to:
-- [Changesets](https://github.com/changesets/changesets) (JavaScript)
-- [Scriv](https://scriv.readthedocs.io/) (Python)
-
-Benefits:
-- **No merge conflicts**: Multiple PRs can add fragments without conflicts
-- **Per-PR documentation**: Each PR documents its own changes
-- **Automated collection**: Fragments are collected during release
-- **Consistent format**: Template ensures consistent changelog entries
-
-```bash
-# Create a changelog fragment
-touch changelog.d/$(date +%Y%m%d_%H%M%S)_my_change.md
-
-# Edit the fragment to document your changes
-```
-
-### CI/CD Pipeline
-
-The GitHub Actions workflow provides:
-
-1. **Linting**: rustfmt and Clippy checks
-2. **Changelog check**: Warns if PRs are missing changelog fragments
-3. **Test matrix**: 3 OS (Ubuntu, macOS, Windows) with Rust stable
-4. **Building**: Release build and package validation
-5. **Release**: Automated GitHub releases when version changes
-
-### Release Automation
-
-The release workflow supports:
-
-- **Auto-release**: Automatically creates releases when version in Cargo.toml changes
-- **Manual release**: Trigger releases via workflow_dispatch with version bump type
-- **Changelog collection**: Automatically collects fragments during release
-- **GitHub releases**: Automatic creation with CHANGELOG content
-
-## Configuration
-
-### Updating Package Name
-
-After creating a repository from this template:
-
-1. Update `Cargo.toml`:
-   - Change `name` field
-   - Update `repository` and `documentation` URLs
-   - Change `[lib]` and `[[bin]]` names
-
-2. Rename the crate in imports:
-   - `tests/integration_test.rs`
-   - `examples/basic_usage.rs`
-   - `src/main.rs`
-
-### Clippy Configuration
-
-Clippy is configured in `Cargo.toml` under `[lints.clippy]`:
-
-- Pedantic lints enabled for strict code quality
-- Nursery lints enabled for additional checks
-- Some common patterns allowed (e.g., `module_name_repetitions`)
-
-### rustfmt Configuration
-
-Uses default rustfmt settings. To customize, create a `rustfmt.toml`:
-
-```toml
-edition = "2021"
-max_width = 100
-tab_spaces = 4
-```
-
-## Scripts Reference
-
-| Script                              | Description                    |
-| ----------------------------------- | ------------------------------ |
-| `cargo test`                        | Run all tests                  |
-| `cargo fmt`                         | Format code                    |
-| `cargo clippy`                      | Run lints                      |
-| `cargo run --example basic_usage`   | Run example                    |
-| `node scripts/check-file-size.mjs`  | Check file size limits         |
-| `node scripts/bump-version.mjs`     | Bump version                   |
-
-## Example Usage
-
-```rust
-use my_package::{add, multiply, delay};
-
-#[tokio::main]
-async fn main() {
-    // Basic arithmetic
-    let sum = add(2, 3);     // 5
-    let product = multiply(2, 3);  // 6
-
-    println!("2 + 3 = {sum}");
-    println!("2 * 3 = {product}");
-
-    // Async operations
-    delay(1.0).await;  // Wait for 1 second
-}
-```
-
-See `examples/basic_usage.rs` for more examples.
+- **Embedded tables** (`lookup_*_preimage` functions): Precomputed at compile time, zero runtime cost
+- **Dynamic tables** (`HashLookupTable`): Built at runtime, useful for experimentation
 
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes and add tests
-4. Run quality checks: `cargo fmt && cargo clippy && cargo test`
-5. Add a changelog fragment
-6. Commit your changes (pre-commit hooks will run automatically)
-7. Push and create a Pull Request
-
 ## License
 
 [Unlicense](LICENSE) - Public Domain
 
-This is free and unencumbered software released into the public domain. See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-Inspired by:
-- [js-ai-driven-development-pipeline-template](https://github.com/link-foundation/js-ai-driven-development-pipeline-template)
-- [python-ai-driven-development-pipeline-template](https://github.com/link-foundation/python-ai-driven-development-pipeline-template)
-
-## Resources
-
-- [Rust Book](https://doc.rust-lang.org/book/)
-- [Cargo Book](https://doc.rust-lang.org/cargo/)
-- [Clippy Documentation](https://rust-lang.github.io/rust-clippy/)
-- [rustfmt Documentation](https://rust-lang.github.io/rustfmt/)
-- [Pre-commit Documentation](https://pre-commit.com/)
+This is free and unencumbered software released into the public domain.

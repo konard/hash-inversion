@@ -409,3 +409,60 @@ jobs:
             1. Review the changelog fragment in this PR
             2. Merge this PR to main
             3. The automated release workflow will publish to crates.io and create a GitHub release
+
+  # === GENERATE PLOTS ===
+  # Generate 256x256 hash visualization plots when Rust code changes on main
+  generate-plots:
+    name: Generate Hash Plots
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint, test, build]
+    # Run on push to main when Rust code changes (hash implementations may have changed)
+    if: |
+      always() && !cancelled() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build.result == 'success' &&
+      needs.detect-changes.outputs.rs-changed == 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-plots-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-plots-
+
+      - name: Generate hash plots
+        run: node scripts/generate-plots.mjs --output-dir plots
+
+      - name: Configure git
+        run: node scripts/git-config.mjs
+
+      - name: Commit plots if changed
+        run: |
+          if [ -n "$(git status plots/ --porcelain)" ]; then
+            git add plots/
+            git commit -m "chore: update hash visualization plots [skip ci]"
+            git push
+            echo "Plots updated and committed."
+          else
+            echo "No changes to plots."
+          fi

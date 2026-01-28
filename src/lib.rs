@@ -27,6 +27,13 @@ use md5::{Digest, Md5};
 use sha2::Sha256;
 use std::collections::HashMap;
 
+pub mod lookup_tables;
+pub use lookup_tables::{
+    lookup_md5_8bit_preimage, lookup_mini_md5_preimage, lookup_mini_sha256_preimage,
+    lookup_sha256_8bit_preimage, MD5_8BIT_PREIMAGES, MINI_MD5_8BIT_PREIMAGES,
+    MINI_SHA256_8BIT_PREIMAGES, SHA256_8BIT_PREIMAGES,
+};
+
 /// Package version (matches Cargo.toml version).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

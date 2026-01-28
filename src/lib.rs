@@ -263,6 +263,7 @@ const MINI_MD5_K: [u8; 16] = [
 /// assert!(h1 <= 255);
 /// ```
 #[must_use]
+#[allow(clippy::many_single_char_names)] // MD5 traditionally uses a, b, c, d, f, g, h for state
 pub fn mini_md5(data: &[u8]) -> u8 {
     // Initialize state with multiple variables (inspired by MD5's A, B, C, D)
     let mut a: u8 = 0x67; // From MD5's 0x67452301

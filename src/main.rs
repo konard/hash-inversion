@@ -3,10 +3,11 @@
 //! This binary demonstrates the hash inversion functionality:
 //! 1. Simple mathematical inverse for toy hash function
 //! 2. Lookup table inversion for truncated MD5 and SHA-256
+//! 3. Custom 8-bit hash functions with full hash inversion (`MiniMD5`, `MiniSHA256`)
 
 use hash_inversion::{
-    inverse_simple_hash, md5_16bit, md5_8bit, sha256_16bit, sha256_8bit, simple_hash,
-    HashLookupTable, SIMPLE_MOD, VERSION,
+    inverse_simple_hash, md5_16bit, md5_8bit, mini_md5, mini_sha256, sha256_16bit, sha256_8bit,
+    simple_hash, HashLookupTable, SIMPLE_MOD, VERSION,
 };
 
 fn main() {
@@ -25,6 +26,9 @@ fn main() {
 
     // Part 4: Show that lookup tables find ANY preimage, not the original
     demonstrate_preimage_concept();
+
+    // Part 5: Custom 8-bit hash functions (full hash inversion)
+    demonstrate_custom_hashes();
 
     println!("\n{}", "=".repeat(60));
     println!("Demonstration complete!");
@@ -207,6 +211,76 @@ fn demonstrate_preimage_concept() {
         println!("  (Preimage differs from original - this is expected)");
         println!("  Both inputs hash to the same 8-bit value (a collision).");
     }
+}
+
+fn demonstrate_custom_hashes() {
+    println!("PART 5: Custom 8-bit Hash Functions (Full Hash Inversion)");
+    println!("{}", "-".repeat(60));
+    println!();
+    println!("Unlike truncated hashes, these custom functions natively output 8 bits.");
+    println!("This means the lookup table contains the FULL hash function output,");
+    println!("enabling true 'full hash inversion' rather than truncated inversion.");
+    println!();
+
+    // MiniMD5
+    println!("=== MiniMD5 (inspired by MD5's structure) ===");
+    println!("Building MiniMD5 lookup table...");
+    let mini_md5_table = HashLookupTable::new_mini_md5();
+    println!(
+        "Coverage: {}/{} ({:.2}%)",
+        mini_md5_table.coverage(),
+        mini_md5_table.max_hash_values(),
+        mini_md5_table.coverage_percent()
+    );
+
+    let test_inputs: &[&[u8]] = &[b"hello", b"world", b"test", b"hash", b"inversion"];
+    println!("\nTesting MiniMD5 inversion:");
+    for input in test_inputs {
+        let hash = mini_md5(input);
+        let preimage = mini_md5_table.lookup(u32::from(hash));
+        let verified = preimage.is_some_and(|p| mini_md5(p) == hash);
+        println!(
+            "  {:?} -> hash={:3} -> preimage found: {} {}",
+            String::from_utf8_lossy(input),
+            hash,
+            preimage.is_some(),
+            check_mark(verified)
+        );
+    }
+
+    // MiniSHA256
+    println!("\n=== MiniSHA256 (inspired by SHA-256's structure) ===");
+    println!("Building MiniSHA256 lookup table...");
+    let mini_sha256_table = HashLookupTable::new_mini_sha256();
+    println!(
+        "Coverage: {}/{} ({:.2}%)",
+        mini_sha256_table.coverage(),
+        mini_sha256_table.max_hash_values(),
+        mini_sha256_table.coverage_percent()
+    );
+
+    println!("\nTesting MiniSHA256 inversion:");
+    for input in test_inputs {
+        let hash = mini_sha256(input);
+        let preimage = mini_sha256_table.lookup(u32::from(hash));
+        let verified = preimage.is_some_and(|p| mini_sha256(p) == hash);
+        println!(
+            "  {:?} -> hash={:3} -> preimage found: {} {}",
+            String::from_utf8_lossy(input),
+            hash,
+            preimage.is_some(),
+            check_mark(verified)
+        );
+    }
+
+    // Compare truncated vs custom
+    println!("\n=== Comparison: Truncated vs Custom Hash ===");
+    println!("Truncated approach: Take 8 bits from 128/256-bit hash");
+    println!("Custom approach: Hash function designed to output exactly 8 bits");
+    println!();
+    println!("Both achieve 100% coverage for 8-bit output, but the custom");
+    println!("approach stores the FULL function output in the lookup table.");
+    println!();
 }
 
 const fn check_mark(success: bool) -> &'static str {

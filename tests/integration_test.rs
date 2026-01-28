@@ -3,8 +3,8 @@
 //! These tests verify the public API works correctly.
 
 use hash_inversion::{
-    inverse_simple_hash, md5_16bit, md5_8bit, sha256_16bit, sha256_8bit, simple_hash,
-    HashLookupTable, SIMPLE_MOD, VERSION,
+    inverse_simple_hash, md5_16bit, md5_8bit, mini_md5, mini_sha256, sha256_16bit, sha256_8bit,
+    simple_hash, HashLookupTable, SIMPLE_MOD, VERSION,
 };
 
 mod simple_hash_integration_tests {
@@ -173,6 +173,97 @@ mod lookup_table_integration_tests {
             let sha_hash = sha256_8bit(input);
             let sha_preimage = sha_table.lookup(u32::from(sha_hash)).unwrap();
             assert_eq!(sha256_8bit(sha_preimage), sha_hash);
+        }
+    }
+}
+
+mod custom_hash_integration_tests {
+    use super::*;
+
+    #[test]
+    fn test_mini_md5_lookup_roundtrip() {
+        let table = HashLookupTable::new_mini_md5();
+
+        // Verify we can find a preimage for every possible 8-bit hash value
+        for hash_value in 0..=255u32 {
+            let preimage = table
+                .lookup(hash_value)
+                .expect("Should have preimage for every 8-bit hash");
+            let computed_hash = u32::from(mini_md5(preimage));
+            assert_eq!(computed_hash, hash_value);
+        }
+    }
+
+    #[test]
+    fn test_mini_sha256_lookup_roundtrip() {
+        let table = HashLookupTable::new_mini_sha256();
+
+        for hash_value in 0..=255u32 {
+            let preimage = table
+                .lookup(hash_value)
+                .expect("Should have preimage for every 8-bit hash");
+            let computed_hash = u32::from(mini_sha256(preimage));
+            assert_eq!(computed_hash, hash_value);
+        }
+    }
+
+    #[test]
+    fn test_mini_md5_produces_consistent_hashes() {
+        let input = b"custom hash test input";
+        let h1 = mini_md5(input);
+        let h2 = mini_md5(input);
+        let h3 = mini_md5(input);
+        assert_eq!(h1, h2);
+        assert_eq!(h2, h3);
+    }
+
+    #[test]
+    fn test_mini_sha256_produces_consistent_hashes() {
+        let input = b"another custom hash test";
+        let h1 = mini_sha256(input);
+        let h2 = mini_sha256(input);
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn test_custom_hash_lookup_table_metadata() {
+        let mini_md5_table = HashLookupTable::new_mini_md5();
+        assert_eq!(mini_md5_table.bits(), 8);
+        assert_eq!(mini_md5_table.hash_name(), "MiniMD5");
+        assert_eq!(mini_md5_table.max_hash_values(), 256);
+        assert_eq!(mini_md5_table.coverage(), 256);
+
+        let mini_sha_table = HashLookupTable::new_mini_sha256();
+        assert_eq!(mini_sha_table.bits(), 8);
+        assert_eq!(mini_sha_table.hash_name(), "MiniSHA256");
+        assert_eq!(mini_sha_table.max_hash_values(), 256);
+        assert_eq!(mini_sha_table.coverage(), 256);
+    }
+
+    #[test]
+    fn test_custom_hash_lookup_arbitrary_strings() {
+        // Test that we can find preimages for hashes of arbitrary strings
+        let test_strings: &[&[u8]] = &[
+            b"hello world",
+            b"test123",
+            b"The quick brown fox jumps over the lazy dog",
+            b"",
+            b"\x00\x01\x02",
+        ];
+
+        let mini_md5_table = HashLookupTable::new_mini_md5();
+        let mini_sha_table = HashLookupTable::new_mini_sha256();
+
+        for input in test_strings {
+            // MiniMD5
+            let md5_hash = mini_md5(input);
+            let md5_preimage = mini_md5_table.lookup(u32::from(md5_hash)).unwrap();
+            assert_eq!(mini_md5(md5_preimage), md5_hash);
+
+            // MiniSHA256
+            let sha_hash = mini_sha256(input);
+            let sha_preimage = mini_sha_table.lookup(u32::from(sha_hash)).unwrap();
+            assert_eq!(mini_sha256(sha_preimage), sha_hash);
         }
     }
 }

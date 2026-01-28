@@ -1,79 +1,184 @@
-//! Integration tests for my-package.
+//! Integration tests for hash-inversion.
 //!
 //! These tests verify the public API works correctly.
 
-use my_package::{add, delay, multiply};
+use hash_inversion::{
+    inverse_simple_hash, md5_16bit, md5_8bit, sha256_16bit, sha256_8bit, simple_hash,
+    HashLookupTable, SIMPLE_MOD, VERSION,
+};
 
-mod add_integration_tests {
+mod simple_hash_integration_tests {
     use super::*;
 
     #[test]
-    fn test_add_returns_correct_sum() {
-        assert_eq!(add(10, 20), 30);
+    fn test_simple_hash_full_roundtrip() {
+        // Test that every value in the domain [0, SIMPLE_MOD) can be round-tripped
+        for x in 0..SIMPLE_MOD {
+            let h = simple_hash(x);
+            let x_back = inverse_simple_hash(h);
+            assert_eq!(x, x_back, "Failed roundtrip for x={x}");
+        }
     }
 
     #[test]
-    fn test_add_handles_large_numbers() {
-        assert_eq!(add(1_000_000_000, 2_000_000_000), 3_000_000_000);
+    fn test_simple_hash_is_bijection() {
+        // Verify all hash outputs are unique (bijection property)
+        let mut seen = std::collections::HashSet::new();
+        for x in 0..SIMPLE_MOD {
+            let h = simple_hash(x);
+            assert!(seen.insert(h), "Hash collision at x={x}, h={h}");
+        }
+        assert_eq!(seen.len(), SIMPLE_MOD as usize);
     }
 
     #[test]
-    fn test_add_handles_negative_result() {
-        assert_eq!(add(-100, 50), -50);
+    fn test_simple_hash_range() {
+        // All outputs should be in [0, SIMPLE_MOD)
+        for x in 0..SIMPLE_MOD {
+            let h = simple_hash(x);
+            assert!((0..SIMPLE_MOD).contains(&h), "Hash out of range: {h}");
+        }
     }
 }
 
-mod multiply_integration_tests {
+mod md5_integration_tests {
     use super::*;
 
     #[test]
-    fn test_multiply_returns_correct_product() {
-        assert_eq!(multiply(10, 20), 200);
+    fn test_md5_8bit_lookup_roundtrip() {
+        let table = HashLookupTable::new_md5_8bit();
+
+        // Verify we can find a preimage for every possible 8-bit hash value
+        for hash_value in 0..=255u32 {
+            let preimage = table
+                .lookup(hash_value)
+                .expect("Should have preimage for every 8-bit hash");
+            let computed_hash = u32::from(md5_8bit(preimage));
+            assert_eq!(computed_hash, hash_value);
+        }
     }
 
     #[test]
-    fn test_multiply_handles_large_numbers() {
-        assert_eq!(multiply(1_000, 1_000_000), 1_000_000_000);
+    fn test_md5_16bit_high_coverage() {
+        let table = HashLookupTable::new_md5_16bit();
+
+        // With 2^20 inputs for 2^16 outputs, we should have excellent coverage
+        assert!(
+            table.coverage_percent() > 99.0,
+            "16-bit MD5 should have >99% coverage, got {:.2}%",
+            table.coverage_percent()
+        );
     }
 
     #[test]
-    fn test_multiply_handles_negative_numbers() {
-        assert_eq!(multiply(-10, -20), 200);
+    fn test_md5_produces_consistent_hashes() {
+        // Same input should always produce same hash
+        let input = b"consistent test input";
+        let h1 = md5_8bit(input);
+        let h2 = md5_8bit(input);
+        let h3 = md5_8bit(input);
+        assert_eq!(h1, h2);
+        assert_eq!(h2, h3);
+
+        let h16_1 = md5_16bit(input);
+        let h16_2 = md5_16bit(input);
+        assert_eq!(h16_1, h16_2);
     }
 }
 
-mod delay_integration_tests {
+mod sha256_integration_tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_delay_waits_minimum_time() {
-        let start = std::time::Instant::now();
-        delay(0.05).await;
-        let elapsed = start.elapsed();
+    #[test]
+    fn test_sha256_8bit_lookup_roundtrip() {
+        let table = HashLookupTable::new_sha256_8bit();
+
+        for hash_value in 0..=255u32 {
+            let preimage = table
+                .lookup(hash_value)
+                .expect("Should have preimage for every 8-bit hash");
+            let computed_hash = u32::from(sha256_8bit(preimage));
+            assert_eq!(computed_hash, hash_value);
+        }
+    }
+
+    #[test]
+    fn test_sha256_16bit_high_coverage() {
+        let table = HashLookupTable::new_sha256_16bit();
 
         assert!(
-            elapsed.as_secs_f64() >= 0.05,
-            "Delay should wait at least 0.05 seconds, but waited {:.4}s",
-            elapsed.as_secs_f64()
+            table.coverage_percent() > 99.0,
+            "16-bit SHA-256 should have >99% coverage, got {:.2}%",
+            table.coverage_percent()
         );
     }
 
-    #[tokio::test]
-    async fn test_delay_zero_completes_quickly() {
-        let start = std::time::Instant::now();
-        delay(0.0).await;
-        let elapsed = start.elapsed();
+    #[test]
+    fn test_sha256_produces_consistent_hashes() {
+        let input = b"another consistent test";
+        let h1 = sha256_8bit(input);
+        let h2 = sha256_8bit(input);
+        assert_eq!(h1, h2);
 
-        assert!(
-            elapsed.as_secs_f64() < 0.1,
-            "Zero delay should complete quickly, but took {:.4}s",
-            elapsed.as_secs_f64()
-        );
+        let h16_1 = sha256_16bit(input);
+        let h16_2 = sha256_16bit(input);
+        assert_eq!(h16_1, h16_2);
+    }
+}
+
+mod lookup_table_integration_tests {
+    use super::*;
+
+    #[test]
+    fn test_lookup_table_metadata() {
+        let md5_8 = HashLookupTable::new_md5_8bit();
+        assert_eq!(md5_8.bits(), 8);
+        assert_eq!(md5_8.hash_name(), "MD5");
+        assert_eq!(md5_8.max_hash_values(), 256);
+
+        let md5_16 = HashLookupTable::new_md5_16bit();
+        assert_eq!(md5_16.bits(), 16);
+        assert_eq!(md5_16.max_hash_values(), 65536);
+
+        let sha_8 = HashLookupTable::new_sha256_8bit();
+        assert_eq!(sha_8.bits(), 8);
+        assert_eq!(sha_8.hash_name(), "SHA-256");
+
+        let sha_16 = HashLookupTable::new_sha256_16bit();
+        assert_eq!(sha_16.bits(), 16);
+        assert_eq!(sha_16.hash_name(), "SHA-256");
+    }
+
+    #[test]
+    fn test_lookup_arbitrary_strings() {
+        // Test that we can find preimages for hashes of arbitrary strings
+        let test_strings: &[&[u8]] = &[
+            b"hello world",
+            b"test123",
+            b"The quick brown fox jumps over the lazy dog",
+            b"",
+            b"\x00\x01\x02",
+        ];
+
+        let md5_table = HashLookupTable::new_md5_8bit();
+        let sha_table = HashLookupTable::new_sha256_8bit();
+
+        for input in test_strings {
+            // MD5 8-bit
+            let md5_hash = md5_8bit(input);
+            let md5_preimage = md5_table.lookup(u32::from(md5_hash)).unwrap();
+            assert_eq!(md5_8bit(md5_preimage), md5_hash);
+
+            // SHA-256 8-bit
+            let sha_hash = sha256_8bit(input);
+            let sha_preimage = sha_table.lookup(u32::from(sha_hash)).unwrap();
+            assert_eq!(sha256_8bit(sha_preimage), sha_hash);
+        }
     }
 }
 
 mod version_tests {
-    use my_package::VERSION;
+    use super::*;
 
     #[test]
     fn test_version_is_not_empty() {
@@ -82,7 +187,6 @@ mod version_tests {
 
     #[test]
     fn test_version_matches_cargo_toml() {
-        // Version should match the one in Cargo.toml
         assert!(VERSION.starts_with("0."));
     }
 }

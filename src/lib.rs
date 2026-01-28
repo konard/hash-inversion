@@ -459,17 +459,27 @@ pub fn mini_sha256(data: &[u8]) -> u8 {
         a = a.wrapping_add(MINI_SHA256_K[0]);
     }
 
-    // Final hash: combine all working variables (truncation is intentional)
+    // Final mixing with non-linear operations to break linear relationship
+    // The naive sum of all working variables creates a linear relationship,
+    // so we use XOR with rotations and prime multipliers instead.
     #[allow(clippy::cast_possible_truncation)]
     let len_byte = data.len() as u8;
-    a.wrapping_add(b)
-        .wrapping_add(c)
-        .wrapping_add(d)
-        .wrapping_add(e)
-        .wrapping_add(f)
-        .wrapping_add(g)
-        .wrapping_add(h)
-        ^ len_byte
+
+    // Layer 1: XOR all together with different rotation amounts
+    let mut result = a ^ b.rotate_left(1) ^ c.rotate_left(2) ^ d.rotate_left(3);
+    result ^= e.rotate_left(4) ^ f.rotate_left(5) ^ g.rotate_left(6) ^ h.rotate_left(7);
+
+    // Layer 2: Feistel-like mixing with prime multipliers
+    result = result.wrapping_add(a.wrapping_mul(3));
+    result ^= b.wrapping_mul(5);
+    result = result.wrapping_add(c.wrapping_mul(7));
+    result ^= d.wrapping_mul(11);
+    result = result.wrapping_add(e.wrapping_mul(13));
+    result ^= f.wrapping_mul(17);
+    result = result.wrapping_add(g.wrapping_mul(19));
+    result ^= h.wrapping_mul(23);
+
+    result.wrapping_add(len_byte.wrapping_mul(179))
 }
 
 // ============================================================================
